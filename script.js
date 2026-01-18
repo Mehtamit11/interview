@@ -8,12 +8,74 @@ const words = [
 let currentWord = words[0];
 let recognition;
 let isListening = false;
+let currentUser = null;
 
 const micBtn = document.getElementById('micBtn');
 const targetWordEl = document.getElementById('targetWord');
 const resultEl = document.getElementById('result');
 const statusEl = document.getElementById('status');
 const newWordBtn = document.getElementById('newWordBtn');
+const logoutBtn = document.getElementById('logoutBtn');
+const userAvatar = document.getElementById('userAvatar');
+const userName = document.getElementById('userName');
+
+// Check authentication
+function checkAuth() {
+    const user = JSON.parse(localStorage.getItem('user') || 'null');
+    if (!user) {
+        window.location.href = 'login.html';
+        return null;
+    }
+    return user;
+}
+
+// Save pronunciation attempt to history
+function savePronunciationAttempt(targetWord, heardWord, isCorrect) {
+    if (!currentUser) return;
+
+    const attempt = {
+        targetWord: targetWord,
+        heardWord: heardWord,
+        correct: isCorrect,
+        timestamp: new Date().toISOString()
+    };
+
+    // Get all history
+    const allHistory = JSON.parse(localStorage.getItem('pronunciationHistory') || '{}');
+    
+    // Get user's history
+    if (!allHistory[currentUser.id]) {
+        allHistory[currentUser.id] = [];
+    }
+    
+    // Add new attempt
+    allHistory[currentUser.id].push(attempt);
+    
+    // Save back to localStorage
+    localStorage.setItem('pronunciationHistory', JSON.stringify(allHistory));
+}
+
+// Initialize user profile
+function initUserProfile() {
+    currentUser = checkAuth();
+    if (!currentUser) return;
+
+    userName.textContent = currentUser.name;
+    
+    if (currentUser.picture) {
+        userAvatar.src = currentUser.picture;
+    } else {
+        userAvatar.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.name)}&background=667eea&color=fff`;
+    }
+}
+
+// Logout functionality
+logoutBtn.addEventListener('click', () => {
+    if (confirm('Are you sure you want to logout?')) {
+        localStorage.removeItem('user');
+        window.location.href = 'login.html';
+    }
+});
 
 // Initialize speech recognition
 function initSpeechRecognition() {
@@ -67,8 +129,12 @@ function checkPronunciation(heard, confidence) {
     const targetLower = currentWord.toLowerCase().trim();
     
     const similarity = calculateSimilarity(heardLower, targetLower);
+    const isCorrect = similarity > 0.8 || heardLower === targetLower;
     
-    if (similarity > 0.8 || heardLower === targetLower) {
+    // Save to history
+    savePronunciationAttempt(currentWord, heard, isCorrect);
+    
+    if (isCorrect) {
         resultEl.className = 'result correct';
         resultEl.innerHTML = `
             <div style="font-size: 24px; margin-bottom: 10px;">✓ Correct!</div>
@@ -86,7 +152,7 @@ function checkPronunciation(heard, confidence) {
     }
 }
 
-// Calculate string similarity using Levenshtein distance
+// Calculate string similarity
 function calculateSimilarity(s1, s2) {
     const longer = s1.length > s2.length ? s1 : s2;
     const shorter = s1.length > s2.length ? s2 : s1;
@@ -141,5 +207,6 @@ newWordBtn.addEventListener('click', getNewWord);
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
+    initUserProfile();
     initSpeechRecognition();
 });
